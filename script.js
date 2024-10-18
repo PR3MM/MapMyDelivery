@@ -160,9 +160,20 @@ function showRoute(routeIndex) {
         }
     });
 
+    // Draw the route using Leaflet Routing Machine
+    L.Routing.control({
+        waypoints: [
+            L.latLng(route.deliveryPerson.location),
+            L.latLng(restaurant.location),
+            L.latLng(route.route[2])
+        ],
+        routeWhileDragging: true
+    }).addTo(map);
+    
+
     // Draw the route
-    const routeCoordinates = route.route.map(point => [point.lat, point.lng]);
-    L.polyline(routeCoordinates, {color: 'blue', weight: 4}).addTo(map);
+    // const routeCoordinates = route.route.map(point => [point.lat, point.lng]);
+    // L.polyline(routeCoordinates, {color: 'blue', weight: 4}).addTo(map);
 
     // Fit the map to the route
     map.fitBounds(L.latLngBounds(routeCoordinates));
