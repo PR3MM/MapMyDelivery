@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <title>Delivery Optimization</title>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+    <!-- Leaflet CSS -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
+    <!-- Leaflet Routing Machine CSS -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet-routing-machine/dist/leaflet-routing-machine.css" />
+    <!-- Leaflet Routing GraphHopper CSS -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet-routing-graphhopper/dist/leaflet-routing-graphhopper.css" />
+
+    <style>
+        #map {
+            height: 400px;
+            width: 100%;
+        }
+
+        #results {
+            margin-top: 20px;
+        }
+
+        .route {
+            margin-bottom: 15px;
+        }
+    </style>
+</head>
+
+<body>
+    <div>
+        <label for="markerType">Select Marker Type:</label>
+        <select id="markerType">
+            <option value="deliveryPerson">Delivery Person</option>
+            <option value="restaurant">Restaurant</option>
+            <option value="destination">Destination</option>
+        </select>
+        <button onclick="startAddingMarkers()">Start Adding Markers</button>
+        <button id="optimizeButton" onclick="optimizeRoutes()" disabled>Optimize Routes</button>
+    </div>
+
+    <div id="map"></div>
+    <div id="results"></div>
+
+    <!-- Leaflet JS -->
+    <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+    <!-- Leaflet Routing Machine JS -->
+    <script src="https://unpkg.com/leaflet-routing-machine/dist/leaflet-routing-machine.js"></script>
+    <!-- GraphHopper Routing Machine JS -->
+    <script src="https://unpkg.com/leaflet-routing-graphhopper/dist/leaflet-routing-graphhopper.js"></script>
+    <!-- Your custom JS file -->
+    <script src="script.js"></script>
+</body>
+
+</html>
