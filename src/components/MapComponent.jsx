@@ -12,8 +12,8 @@ const MapComponent = () => {
     const [restaurant, setRestaurant] = useState(null);
     const [destinations, setDestinations] = useState([]);
     const [currentMarkerType, setCurrentMarkerType] = useState('deliveryPerson');
-    const [distanceMatrix, setDistanceMatrix] = useState([]);
     const [routes, setRoutes] = useState([]);
+    const [routingControls, setRoutingControls] = useState([]);
 
     useEffect(() => {
         const mapInstance = L.map(mapRef.current).setView([18.5204, 73.8567], 12);
@@ -63,95 +63,62 @@ const MapComponent = () => {
         map.on('click', addLocation);
     };
 
-    const calculateDistance = (start, end) => {
-        return map.distance(start, end);
-    };
+    const calculateRoutes = () => {
+        // Clear previous routes
+        routingControls.forEach(control => map.removeControl(control));
+        setRoutingControls([]);
 
-    const calculateDistanceMatrix = () => {
-        const allLocations = [restaurant, ...deliveryPeople, ...destinations];
-        const matrix = [];
+        const newRoutes = [];
+        const newRoutingControls = [];
 
-        for (let i = 0; i < allLocations.length; i++) {
-            matrix[i] = [];
-            for (let j = 0; j < allLocations.length; j++) {
-                if (i !== j) {
-                    matrix[i][j] = calculateDistance(
-                        [allLocations[i].location.lat, allLocations[i].location.lng],
-                        [allLocations[j].location.lat, allLocations[j].location.lng]
-                    );
-                } else {
-                    matrix[i][j] = 0;
-                }
-            }
-        }
+        deliveryPeople.forEach(person => {
+            destinations.forEach(dest => {
+                const waypoints = [
+                    L.latLng(person.location.lat, person.location.lng),
+                    L.latLng(restaurant.location.lat, restaurant.location.lng),
+                    L.latLng(dest.location.lat, dest.location.lng)
+                ];
 
-        setDistanceMatrix(matrix);
-        return matrix;
-    };
+                const routingControl = L.Routing.control({
+                    waypoints: waypoints,
+                    routeWhileDragging: false,
+                    showAlternatives: true,
+                    altLineOptions: {
+                        styles: [
+                            {color: 'black', opacity: 0.15, weight: 9},
+                            {color: 'white', opacity: 0.8, weight: 6},
+                            {color: 'blue', opacity: 0.5, weight: 2}
+                        ]
+                    },
+                    createMarker: function() { return null; } // Prevents duplicate markers
+                }).addTo(map);
 
-    const assignTasks = (matrix) => {
-        const assignments = [];
-        const unassignedDestinations = [...destinations];
+                routingControl.on('routesfound', function(e) {
+                    const routes = e.routes;
+                    const bestRoute = routes[0]; // The first route is typically the best one
 
-        deliveryPeople.forEach((person) => {
-            if (unassignedDestinations.length > 0) {
-                let minDistance = Infinity;
-                let closestDestination;
-                let closestIndex;
+                    newRoutes.push({
+                        deliveryPersonId: person.id,
+                        destinationId: dest.id,
+                        routes: routes.map(route => ({
+                            distance: route.summary.totalDistance,
+                            time: route.summary.totalTime,
+                            coordinates: route.coordinates
+                        })),
+                        bestRoute: {
+                            distance: bestRoute.summary.totalDistance,
+                            time: bestRoute.summary.totalTime
+                        }
+                    });
 
-                unassignedDestinations.forEach((dest, index) => {
-                    const distance = matrix[person.id][dest.id + deliveryPeople.length];
-                    if (distance < minDistance) {
-                        minDistance = distance;
-                        closestDestination = dest;
-                        closestIndex = index;
-                    }
+                    setRoutes(newRoutes);
                 });
 
-                assignments.push({
-                    assignedTo: person,
-                    destination: closestDestination,
-                });
-
-                unassignedDestinations.splice(closestIndex, 1);
-            }
+                newRoutingControls.push(routingControl);
+            });
         });
 
-        return assignments;
-    };
-
-    const optimizeRoutes = () => {
-        const matrix = calculateDistanceMatrix();
-        const assignments = assignTasks(matrix);
-        const optimizedRoutes = assignments.map((assignment) => ({
-            deliveryPersonId: assignment.assignedTo.id,
-            destinationId: assignment.destination.id,
-            route: [
-                assignment.assignedTo.location,
-                restaurant.location,
-                assignment.destination.location
-            ],
-        }));
-
-        setRoutes(optimizedRoutes);
-        displayRoutes(optimizedRoutes);
-    };
-
-    const displayRoutes = (optimizedRoutes) => {
-        optimizedRoutes.forEach((route, index) => {
-            const waypoints = route.route.map(location => L.latLng(location.lat, location.lng));
-            
-            L.Routing.control({
-                waypoints: waypoints,
-                routeWhileDragging: true,
-                lineOptions: {
-                    styles: [{ color: getRouteColor(index), opacity: 0.6, weight: 4 }]
-                },
-                addWaypoints: false,
-                draggableWaypoints: false,
-                createMarker: function() { return null; }, // Prevents duplicate markers
-            }).addTo(map);
-        });
+        setRoutingControls(newRoutingControls);
     };
 
     const getRouteColor = (index) => {
@@ -173,18 +140,27 @@ const MapComponent = () => {
                     <option value="destination">Destination</option>
                 </select>
                 <button onClick={startAddingMarkers}>Start Adding Markers</button>
-                <button onClick={optimizeRoutes} disabled={deliveryPeople.length === 0 || !restaurant || destinations.length === 0}>
-                    Optimize Routes
+                <button onClick={calculateRoutes} disabled={deliveryPeople.length === 0 || !restaurant || destinations.length === 0}>
+                    Calculate Routes
                 </button>
             </div>
             <div ref={mapRef} id="map" style={{ height: '500px' }}></div>
             <div id="results">
-                <h2>Optimized Routes:</h2>
+                <h2>Calculated Routes:</h2>
                 {routes.map((route, index) => (
                     <div key={index} className="route">
                         <h3>Route {index + 1}</h3>
                         <p>Delivery Person: {route.deliveryPersonId}</p>
                         <p>Destination: {route.destinationId}</p>
+                        <p>Best Route: {(route.bestRoute.distance / 1000).toFixed(2)} km, {(route.bestRoute.time / 60).toFixed(2)} minutes</p>
+                        <h4>All Routes:</h4>
+                        <ul>
+                            {route.routes.map((r, i) => (
+                                <li key={i}>
+                                    Route {i + 1}: {(r.distance / 1000).toFixed(2)} km, {(r.time / 60).toFixed(2)} minutes
+                                </li>
+                            ))}
+                        </ul>
                     </div>
                 ))}
             </div>
