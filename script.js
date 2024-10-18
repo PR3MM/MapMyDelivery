@@ -2,19 +2,18 @@ let map;
 let deliveryPeople = [];
 let restaurant = null;
 let destinations = [];
-let currentMarkerType = 'deliveryPerson'; // Default marker type
+let currentMarkerType = 'deliveryPerson';
 let distanceMatrix = [];
+let routes = [];
 
-// Initialize the map
 function initMap() {
-    map = L.map('map').setView([18.5204, 73.8567], 12); // Centered on Pune
+    map = L.map('map').setView([18.5204, 73.8567], 12);
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
 }
 
-// Function to handle adding different markers
 function startAddingMarkers() {
-    map.off('click'); // Remove previous click listeners
-    currentMarkerType = document.getElementById('markerType').value; // Get selected marker type
+    map.off('click');
+    currentMarkerType = document.getElementById('markerType').value;
     map.on('click', addLocation);
 }
 
@@ -48,44 +47,67 @@ function addLocation(e) {
         }).addTo(map).bindPopup(`Destination ${destinations.length}`);
     }
 
-    // Enable the Optimize button if all types of markers are present
     if (deliveryPeople.length > 0 && restaurant && destinations.length > 0) {
         document.getElementById('optimizeButton').disabled = false;
     }
 }
 
-//function to calculate distance matrix
 function calculateDistanceMatrix() {
     distanceMatrix = [];
     let allLocations = [restaurant, ...deliveryPeople, ...destinations];
-    allLocations.forEach((source, i) => {
+    const promises = [];
+
+    for (let i = 0; i < allLocations.length; i++) {
         distanceMatrix[i] = [];
-        allLocations.forEach((destination, j) => {
-            distanceMatrix[i][j] = calculateDistance(source.location, destination.location);
+        for (let j = 0; j < allLocations.length; j++) {
+            if (i !== j) {
+                promises.push(
+                    new Promise((resolve) => {
+                        calculateDistance(allLocations[i].location, allLocations[j].location, (distance) => {
+                            distanceMatrix[i][j] = distance;
+                            resolve();
+                        });
+                    })
+                );
+            } else {
+                distanceMatrix[i][j] = 0;
+            }
+        }
+    }
+
+    return Promise.all(promises);
+}
+
+function calculateDistance(point1, point2, callback) {
+    // First, try using the OpenRouteService API
+    fetch(`https://api.openrouteservice.org/v2/directions/driving-car?api_key=YOUR_API_KEY_HERE&start=${point1.lng},${point1.lat}&end=${point2.lng},${point2.lat}`)
+        .then(response => response.json())
+        .then(data => {
+            const distance = data.features[0].properties.segments[0].distance / 1000; // Convert to km
+            callback(distance);
+        })
+        .catch(error => {
+            console.error("Error with OpenRouteService API:", error);
+            // Fallback to a simple distance calculation
+            const R = 6371; // Radius of the Earth in km
+            const dLat = (point2.lat - point1.lat) * Math.PI / 180;
+            const dLon = (point2.lng - point1.lng) * Math.PI / 180;
+            const a = Math.sin(dLat/2) * Math.sin(dLat/2) +
+                      Math.cos(point1.lat * Math.PI / 180) * Math.cos(point2.lat * Math.PI / 180) *
+                      Math.sin(dLon/2) * Math.sin(dLon/2);
+            const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+            const distance = R * c;
+            callback(distance);
         });
-    });
 }
 
-// Function to calculate the distance between two points
-function calculateDistance(point1, point2) {
-    const R = 6371; // Earth's radius in kilometers
-    const dLat = (point2.lat - point1.lat) * Math.PI / 180;
-    const dLon = (point2.lng - point1.lng) * Math.PI / 180;
-    const a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
-        Math.cos(point1.lat * Math.PI / 180) * Math.cos(point2.lat * Math.PI / 180) *
-        Math.sin(dLon / 2) * Math.sin(dLon / 2);
-    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-    return R * c; // Distance in kilometers
-}
-
-// Function to assign delivery tasks based on the closest delivery person to each destination
-function assignTasks(deliveryPeople, destinations) {
+function assignTasks() {
     let assignments = [];
     let availableDeliveryPeople = [...deliveryPeople];
 
     destinations.forEach(dest => {
-        let closestPerson = availableDeliveryPeople.reduce((closest, person) => {
-            let distance = calculateDistance(person.location, dest.location);
+        let closestPerson = availableDeliveryPeople.reduce((closest, person, index) => {
+            let distance = distanceMatrix[index + 1][destinations.indexOf(dest) + deliveryPeople.length + 1];
             return distance < closest.distance ? { person, distance } : closest;
         }, { person: null, distance: Infinity }).person;
 
@@ -98,18 +120,18 @@ function assignTasks(deliveryPeople, destinations) {
     return assignments;
 }
 
-// Function to optimize routes and display the result
 function optimizeRoutes() {
-    let assignments = assignTasks(deliveryPeople, destinations);
-    let optimizedRoutes = assignments.map(assignment => ({
-        deliveryPerson: assignment.assignedTo,
-        route: [assignment.assignedTo.location, restaurant.location, assignment.destination.location]
-    }));
+    calculateDistanceMatrix().then(() => {
+        let assignments = assignTasks();
+        routes = assignments.map(assignment => ({
+            deliveryPerson: assignment.assignedTo,
+            route: [assignment.assignedTo.location, restaurant.location, assignment.destination.location]
+        }));
 
-    displayRoutes(optimizedRoutes);
+        displayRoutes(routes);
+    });
 }
 
-// Function to display routes on the map and in the results section
 function displayRoutes(routes) {
     const resultsDiv = document.getElementById('results');
     resultsDiv.innerHTML = '<h2>Optimized Routes:</h2>';
@@ -122,19 +144,29 @@ function displayRoutes(routes) {
             <p>Delivery Person: Start (${route.deliveryPerson.location.lat.toFixed(4)}, ${route.deliveryPerson.location.lng.toFixed(4)})</p>
             <p>Restaurant: (${restaurant.location.lat.toFixed(4)}, ${restaurant.location.lng.toFixed(4)})</p>
             <p>Destination: (${route.route[2].lat.toFixed(4)}, ${route.route[2].lng.toFixed(4)})</p>
+            <button onclick="showRoute(${i})">Show Route</button>
         `;
         resultsDiv.appendChild(routeDiv);
-
-        // Draw route on map
-        L.polyline(route.route, { color: getRandomColor(), weight: 3 }).addTo(map);
     });
 }
 
-// Function to generate a random color for the routes
-function getRandomColor() {
-    return '#' + Math.floor(Math.random() * 16777215).toString(16);
+function showRoute(routeIndex) {
+    const route = routes[routeIndex];
+    
+    // Clear previous routes
+    map.eachLayer((layer) => {
+        if (layer instanceof L.Polyline) {
+            map.removeLayer(layer);
+        }
+    });
+
+    // Draw the route
+    const routeCoordinates = route.route.map(point => [point.lat, point.lng]);
+    L.polyline(routeCoordinates, {color: 'blue', weight: 4}).addTo(map);
+
+    // Fit the map to the route
+    map.fitBounds(L.latLngBounds(routeCoordinates));
 }
 
 // Initialize the map when the page loads
 initMap();
-    
