@@ -1,9 +1,8 @@
 import React, { useEffect, useRef, useState } from "react";
 import L from "leaflet";
-import "leaflet-routing-machine";
+import axios from "axios";
 import "../index.css";
 import 'leaflet/dist/leaflet.css';
-import 'leaflet-routing-machine/dist/leaflet-routing-machine.css';
 
 const MapComponent = () => {
     const mapRef = useRef(null);
@@ -13,7 +12,12 @@ const MapComponent = () => {
     const [destinations, setDestinations] = useState([]);
     const [currentMarkerType, setCurrentMarkerType] = useState('deliveryPerson');
     const [routes, setRoutes] = useState([]);
-    const [routingControls, setRoutingControls] = useState([]);
+
+    // Color palette for routes
+    const routeColors = [
+        '#FF5733', '#33FF57', '#3357FF', '#FF33F1', '#33FFF1', '#F1FF33',
+        '#FF8C33', '#33FF8C', '#338CFF', '#8C33FF', '#33FFFF', '#FFFF33'
+    ];
 
     useEffect(() => {
         const mapInstance = L.map(mapRef.current).setView([18.5204, 73.8567], 12);
@@ -31,7 +35,6 @@ const MapComponent = () => {
         if (currentMarkerType === 'deliveryPerson') {
             const newDeliveryPerson = { id: deliveryPeople.length + 1, location: { lat, lng } };
             setDeliveryPeople((prev) => [...prev, newDeliveryPerson]);
-            //add different icon for delivery person
 
             L.marker([lat, lng], {
                 icon: L.icon({
@@ -71,68 +74,80 @@ const MapComponent = () => {
         map.on('click', addLocation);
     };
 
-    const calculateRoutes = () => {
-        // Clear previous routes
-        routingControls.forEach(control => map.removeControl(control));
-        setRoutingControls([]);
-
+    const calculateRoutes = async () => {
         const newRoutes = [];
-        const newRoutingControls = [];
+        const graphhopperKey = '0594e127-63d0-4fc8-8413-33cdb50f3d34';
+        let colorIndex = 0;
 
-        deliveryPeople.forEach(person => {
-            destinations.forEach(dest => {
+        for (const person of deliveryPeople) {
+            for (const dest of destinations) {
                 const waypoints = [
-                    L.latLng(person.location.lat, person.location.lng),
-                    L.latLng(restaurant.location.lat, restaurant.location.lng),
-                    L.latLng(dest.location.lat, dest.location.lng)
+                    `${person.location.lat},${person.location.lng}`,
+                    `${restaurant.location.lat},${restaurant.location.lng}`,
+                    `${dest.location.lat},${dest.location.lng}`
                 ];
 
-                const routingControl = L.Routing.control({
-                    waypoints: waypoints,
-                    routeWhileDragging: false,
-                    showAlternatives: true,
-                    altLineOptions: {
-                        styles: [
-                            {color: 'black', opacity: 0.15, weight: 9},
-                            {color: 'white', opacity: 0.8, weight: 6},
-                            {color: 'blue', opacity: 0.5, weight: 2}
-                        ]
-                    },
-                    createMarker: function() { return null; } // Prevents duplicate markers
-                }).addTo(map);
+                try {
+                    const response = await axios.get(`https://graphhopper.com/api/1/route?point=${waypoints.join('&point=')}&vehicle=car&locale=en&calc_points=true&key=${graphhopperKey}`);
 
-                routingControl.on('routesfound', function(e) {
-                    const routes = e.routes;
-                    const bestRoute = routes[0]; // The first route is typically the best one
+                    if (response.data && response.data.paths && response.data.paths.length > 0) {
+                        const route = response.data.paths[0];
+                        const routeCoordinates = decodePolyline(route.points);
+                        const routeColor = routeColors[colorIndex % routeColors.length];
 
-                    newRoutes.push({
-                        deliveryPersonId: person.id,
-                        destinationId: dest.id,
-                        routes: routes.map(route => ({
-                            distance: route.summary.totalDistance,
-                            time: route.summary.totalTime,
-                            coordinates: route.coordinates
-                        })),
-                        bestRoute: {
-                            distance: bestRoute.summary.totalDistance,
-                            time: bestRoute.summary.totalTime
-                        }
-                    });
+                        newRoutes.push({
+                            deliveryPersonId: person.id,
+                            destinationId: dest.id,
+                            distance: route.distance,
+                            time: route.time,
+                            coordinates: routeCoordinates,
+                            color: routeColor
+                        });
 
-                    setRoutes(newRoutes);
-                });
+                        // Draw the route on the map with the assigned color
+                        L.polyline(routeCoordinates, {color: routeColor, weight: 3}).addTo(map);
 
-                newRoutingControls.push(routingControl);
-            });
-        });
+                        colorIndex++;
+                    }
+                } catch (error) {
+                    console.error('Error fetching route:', error);
+                }
+            }
+        }
 
-        setRoutingControls(newRoutingControls);
+        setRoutes(newRoutes);
     };
 
-    const getRouteColor = (index) => {
-        const colors = ['#FF5733', '#33FF57', '#3357FF', '#FF33F1', '#33FFF1', '#F1FF33'];
-        return colors[index % colors.length];
-    };
+    // Helper function to decode the polyline
+    function decodePolyline(encoded) {
+        const poly = [];
+        let index = 0, len = encoded.length;
+        let lat = 0, lng = 0;
+
+        while (index < len) {
+            let b, shift = 0, result = 0;
+            do {
+                b = encoded.charAt(index++).charCodeAt(0) - 63;
+                result |= (b & 0x1f) << shift;
+                shift += 5;
+            } while (b >= 0x20);
+            const dlat = ((result & 1) ? ~(result >> 1) : (result >> 1));
+            lat += dlat;
+
+            shift = 0;
+            result = 0;
+            do {
+                b = encoded.charAt(index++).charCodeAt(0) - 63;
+                result |= (b & 0x1f) << shift;
+                shift += 5;
+            } while (b >= 0x20);
+            const dlng = ((result & 1) ? ~(result >> 1) : (result >> 1));
+            lng += dlng;
+
+            poly.push([lat / 1e5, lng / 1e5]);
+        }
+        return poly;
+    }
 
     return (
         <div id="app">
@@ -156,19 +171,12 @@ const MapComponent = () => {
             <div id="results">
                 <h2>Calculated Routes:</h2>
                 {routes.map((route, index) => (
-                    <div key={index} className="route">
+                    <div key={index} className="route" style={{borderLeft: `5px solid ${route.color}`}}>
                         <h3>Route {index + 1}</h3>
                         <p>Delivery Person: {route.deliveryPersonId}</p>
                         <p>Destination: {route.destinationId}</p>
-                        <p>Best Route: {(route.bestRoute.distance / 1000).toFixed(2)} km, {(route.bestRoute.time / 60).toFixed(2)} minutes</p>
-                        <h4>All Routes:</h4>
-                        <ul>
-                            {route.routes.map((r, i) => (
-                                <li key={i}>
-                                    Route {i + 1}: {(r.distance / 1000).toFixed(2)} km, {(r.time / 60).toFixed(2)} minutes
-                                </li>
-                            ))}
-                        </ul>
+                        <p>Distance: {(route.distance / 1000).toFixed(2)} km</p>
+                        <p>Time: {(route.time / 60000).toFixed(2)} minutes</p>
                     </div>
                 ))}
             </div>
