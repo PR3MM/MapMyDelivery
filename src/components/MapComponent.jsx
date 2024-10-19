@@ -80,7 +80,7 @@ const MapComponent = () => {
     const calculateRoutes = async () => {
         const newRoutes = [];
         const graphhopperKey = import.meta.env.VITE_GRAPHHOPPER_KEY;
-
+ 
         let colorIndex = 0;
         const distanceMatrixTemp = Array.from(Array(deliveryPeople.length + 1), () => Array(destinations.length + 1).fill(Infinity));
     
