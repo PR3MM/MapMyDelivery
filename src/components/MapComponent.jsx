@@ -81,7 +81,6 @@ const MapComponent = () => {
     const calculateRoutes = async () => {
         const newRoutes = [];
         const graphhopperKey = import.meta.env.VITE_GRAPHHOPPER_KEY;
-        console.log('GraphHopper API Key:', graphhopperKey);
 
  
         let colorIndex = 0;
