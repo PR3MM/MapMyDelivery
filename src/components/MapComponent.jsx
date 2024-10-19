@@ -79,7 +79,8 @@ const MapComponent = () => {
 
     const calculateRoutes = async () => {
         const newRoutes = [];
-        const graphhopperKey = '0594e127-63d0-4fc8-8413-33cdb50f3d34';
+        const graphhopperKey = import.meta.env.VITE_GRAPHHOPPER_KEY;
+
         let colorIndex = 0;
         const distanceMatrixTemp = Array.from(Array(deliveryPeople.length + 1), () => Array(destinations.length + 1).fill(Infinity));
     
