@@ -366,6 +366,38 @@ const MapComponent = () => {
         return null;
     };
 
+    const assignTasksnew = () => {
+        // Create a new div element for assignments
+        const assignmentsHTML = document.createElement('div');
+    
+        // Generate the assignments list by mapping over the assignments array
+        const assignmentsList = assignments.map((assignment) => (
+            `<li>Delivery Person ${assignment.assignedTo.id} assigned to Destination ${assignment.destination.id}</li>`
+        )).join('');
+    
+        // Generate the list of idle delivery people by filtering out those already assigned
+        const idlePeopleList = deliveryPeople
+            .filter(person => !assignments.some(a => a.assignedTo.id === person.id))
+            .map(person => `<li>Delivery Person ${person.id}</li>`)
+            .join('');
+    
+        // Set the inner HTML of the assignmentsHTML div
+        assignmentsHTML.innerHTML = `
+            <h2 class="text-lg font-semibold">Assignments:</h2>
+            <ul class="list-disc ml-6">
+                ${assignmentsList || '<li>No assignments available.</li>'}
+            </ul>
+            <h2 class="text-lg font-semibold mt-4">Idle Delivery People:</h2>
+            <ul class="list-disc ml-6">
+                ${idlePeopleList || '<li>All delivery people are assigned.</li>'}
+            </ul>
+        `;
+    
+        // Append the constructed HTML to the container
+        document.getElementById('app').appendChild(assignmentsHTML);
+    };
+    
+    
 
 
    
@@ -400,7 +432,8 @@ const MapComponent = () => {
                     Calculate Routes
                 </button>
                 <button
-                    onClick={assignTasks}
+                    // onClick={assignTasks}
+                    onClick={assignTasksnew}
                     disabled={routes.length === 0}
                     className="bg-teal-500 text-white px-4 py-2 rounded hover:bg-teal-600 disabled:opacity-50"
                 >
