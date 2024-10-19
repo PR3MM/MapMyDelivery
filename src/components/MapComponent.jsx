@@ -31,13 +31,21 @@ const MapComponent = () => {
         if (currentMarkerType === 'deliveryPerson') {
             const newDeliveryPerson = { id: deliveryPeople.length + 1, location: { lat, lng } };
             setDeliveryPeople((prev) => [...prev, newDeliveryPerson]);
-            L.marker([lat, lng]).addTo(map).bindPopup(`Delivery Person ${newDeliveryPerson.id}`);
+            //add different icon for delivery person
+
+            L.marker([lat, lng], {
+                icon: L.icon({
+                    iconUrl: 'https://cdn-icons-png.freepik.com/256/6951/6951721.png?ga=GA1.1.1187748767.1708226618&semt=ais_hybrid',
+                    iconSize: [25, 41],
+                    iconAnchor: [12, 41],
+                }),
+            }).addTo(map).bindPopup(`Delivery Person ${newDeliveryPerson.id}`);
         } else if (currentMarkerType === 'restaurant') {
             if (!restaurant) {
                 setRestaurant({ location: { lat, lng } });
                 L.marker([lat, lng], {
                     icon: L.icon({
-                        iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-red.png',
+                        iconUrl: 'https://cdn-icons-png.freepik.com/256/6643/6643359.png?ga=GA1.1.1187748767.1708226618&semt=ais_hybrid',
                         iconSize: [25, 41],
                         iconAnchor: [12, 41],
                     }),
