@@ -136,7 +136,6 @@ const MapComponent = () => {
     const animateMarker = (coordinates, color) => {
         let step = 0;
         const numSteps = coordinates.length;
-
         const rider = L.circleMarker(coordinates[0], {
             radius: 7,
             color: color,
@@ -202,37 +201,55 @@ const MapComponent = () => {
         setAssignments(assignments);
     };
 
-    return (
-        <div id="app">
-            <div className="input-group">
-                <label htmlFor="markerType">Select Marker Type:</label>
-                <select
-                    id="markerType"
-                    onChange={(e) => setCurrentMarkerType(e.target.value)}
-                    value={currentMarkerType}
+    return (<div id="app" className="p-4">
+        <div className="mb-4 flex flex-col space-y-2">
+            <label htmlFor="markerType" className="font-semibold">Select Marker Type:</label>
+            <select
+                id="markerType"
+                onChange={(e) => setCurrentMarkerType(e.target.value)}
+                value={currentMarkerType}
+                className="border border-gray-300 rounded p-2"
+            >
+                <option value="deliveryPerson">Delivery Person</option>
+                <option value="restaurant">Restaurant</option>
+                <option value="destination">Destination</option>
+            </select>
+            <div className="flex space-x-2">
+                <button
+                    onClick={startAddingMarkers}
+                    className="bg-yellow-400 text-white px-4 py-2 rounded hover:bg-yellow-500"
                 >
-                    <option value="deliveryPerson">Delivery Person</option>
-                    <option value="restaurant">Restaurant</option>
-                    <option value="destination">Destination</option>
-                </select>
-                <button onClick={startAddingMarkers}>Start Adding Markers</button>
-                <button onClick={calculateRoutes} disabled={deliveryPeople.length === 0 || !restaurant || destinations.length === 0}>
+                    Start Adding Markers
+                </button>
+                <button
+                    onClick={calculateRoutes}
+                    disabled={deliveryPeople.length === 0 || destinations.length === 0 || !restaurant}
+                    className="bg-red-500 text-white px-4 py-2 rounded hover:bg-red-600 disabled:opacity-50"
+                >
                     Calculate Routes
                 </button>
-            </div>
-            <div ref={mapRef} id="map" style={{ height: '500px' }}></div>
-            <div id="results">
-                <h2>Calculated Routes:</h2>
-                {routes.map((route, index) => (
-                    <div key={index} className="route" style={{ borderLeft: `5px solid ${route.color}` }}>
-                        <h3>Route {index + 1}</h3>
-                        <p>{`Rider ${route.deliveryPersonId} to Destination ${route.destinationId}`}</p>
-                        <p>Distance: {(route.distance / 1000).toFixed(2)} km</p>
-                        <p>Time: {(route.time / 60000).toFixed(2)} minutes</p>
-                    </div>
-                ))}
+                <button
+                    onClick={assignTasks}
+                    disabled={routes.length === 0}
+                    className="bg-teal-500 text-white px-4 py-2 rounded hover:bg-teal-600 disabled:opacity-50"
+                >
+                    Assign Tasks
+                </button>
             </div>
         </div>
+        <div ref={mapRef} className="h-96 border border-gray-300"></div>
+        <div className="mt-4">
+            <h2 className="text-lg font-semibold">Assignments:</h2>
+            <ul className="list-disc ml-6">
+                {assignments.map((assignment, index) => (
+                    <li key={index}>
+                        Delivery Person {assignment.assignedTo.id} assigned to Destination {assignment.destination.id}
+                    </li>
+                ))}
+            </ul>
+        </div>
+    </div>
+    
     );
 };
 
