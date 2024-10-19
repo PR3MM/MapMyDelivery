@@ -79,61 +79,56 @@ const MapComponent = () => {
     };
 
     const calculateRoutes = async () => {
-        const newRoutes = [];
         const graphhopperKey = import.meta.env.VITE_GRAPHHOPPER_KEY;
-
- 
-        let colorIndex = 0;
-        const distanceMatrixTemp = Array.from(Array(deliveryPeople.length + 1), () => Array(destinations.length + 1).fill(Infinity));
-    
-        for (const person of deliveryPeople) {
-            for (const dest of destinations) {
-                const waypoints = [
-                    `${person.location.lat},${person.location.lng}`,
-                    `${restaurant.location.lat},${restaurant.location.lng}`,
-                    `${dest.location.lat},${dest.location.lng}`
-                ];
-    
-                try {
-                    const response = await axios.get(
-                        `https://graphhopper.com/api/1/route?point=${waypoints.join('&point=')}&vehicle=car&locale=en&calc_points=true&key=${graphhopperKey}`
-                    );
-    
-                    if (response.data && response.data.paths && response.data.paths.length > 0) {
-                        const routeColor = routeColors[colorIndex % routeColors.length];
-                        colorIndex++;
-    
-                        const bestRoute = response.data.paths[0];
-                        const routeCoordinates = decodePolyline(bestRoute.points);
-    
-                        newRoutes.push({
-                            deliveryPersonId: person.id,
-                            destinationId: dest.id,
-                            color: routeColor,
-                            distance: bestRoute.distance,
-                            time: bestRoute.time,
-                            coordinates: routeCoordinates,
-                        });
-
-                        // Store distances for assignment
-                        distanceMatrixTemp[person.id][dest.id + deliveryPeople.length] = bestRoute.distance;
-
-                        const polyline = L.polyline(routeCoordinates, {
-                            color: routeColor,
-                            weight: 4,
-                            opacity: 1
-                        }).addTo(map);
-    
-                        animateMarker(routeCoordinates, routeColor);
-                    }
-                } catch (error) {
-                    console.error('Error fetching route:', error);
-                }
-            }
+        if (!graphhopperKey) {
+            console.error("GraphHopper API key is missing");
+            return;
         }
     
-        setDistanceMatrix(distanceMatrixTemp); // Save distance matrix
-        setRoutes(newRoutes);
+        const distanceMatrixTemp = Array.from(Array(deliveryPeople.length), () => Array(destinations.length).fill(Infinity));
+        
+        try {
+            for (let i = 0; i < deliveryPeople.length; i++) {
+                for (let j = 0; j < destinations.length; j++) {
+                    const person = deliveryPeople[i];
+                    const dest = destinations[j];
+                    if (!person || !dest || !restaurant) {
+                        console.error(`Missing data for calculation: person=${person}, dest=${dest}, restaurant=${restaurant}`);
+                        continue;
+                    }
+                    
+                    const waypoints = [
+                        `${person.location.lat},${person.location.lng}`,
+                        `${restaurant.location.lat},${restaurant.location.lng}`,
+                        `${dest.location.lat},${dest.location.lng}`
+                    ];
+        
+                    try {
+                        const response = await axios.get(
+                            `https://graphhopper.com/api/1/route?point=${waypoints.join('&point=')}&vehicle=car&locale=en&calc_points=true&key=${graphhopperKey}`
+                        );
+        
+                        if (response.data && response.data.paths && response.data.paths.length > 0) {
+                            const bestRoute = response.data.paths[0];
+                            distanceMatrixTemp[i][j] = bestRoute.distance;
+                            console.log(`Route calculated: Person ${i+1} to Destination ${j+1}, Distance: ${bestRoute.distance}`);
+                        } else {
+                            console.warn(`No valid route found for Person ${i+1} to Destination ${j+1}`);
+                        }
+                    } catch (error) {
+                        console.error(`Error fetching route for Person ${i+1} to Destination ${j+1}:`, error.message);
+                    }
+                }
+            }
+        
+            setDistanceMatrix(distanceMatrixTemp);
+
+            
+            console.log("Distance matrix calculated:", distanceMatrixTemp);
+            assignTasks(distanceMatrixTemp, deliveryPeople, destinations);
+        } catch (error) {
+            console.error("Error in calculateRoutes:", error);
+        }
     };
 
     const animateMarker = (coordinates, color) => {
@@ -145,14 +140,15 @@ const MapComponent = () => {
             fillColor: color,
             fillOpacity: 1
         }).addTo(map);
-
+    
         function animate() {
             step = (step + 1) % numSteps;
             rider.setLatLng(coordinates[step]);
             animationRef.current.push(requestAnimationFrame(animate));
         }
-
+    
         animate();
+        return rider;
     };
 
     function decodePolyline(encoded) {
@@ -185,25 +181,196 @@ const MapComponent = () => {
         return poly;
     }
 
-    const assignTasks = () => {
-        let assignments = [];
-        let availableDeliveryPeople = [...deliveryPeople];
-
-        destinations.forEach(dest => {
-            let closestPerson = availableDeliveryPeople.reduce((closest, person, index) => {
-                let distance = distanceMatrix[person.id][dest.id + deliveryPeople.length];
-                return distance < closest.distance ? { person, distance } : closest;
-            }, { person: null, distance: Infinity }).person;
-
-            if (closestPerson) {
-                assignments.push({ destination: dest, assignedTo: closestPerson });
-                availableDeliveryPeople = availableDeliveryPeople.filter(p => p !== closestPerson);
+    const assignTasks = (distanceMatrix, deliveryPeople, destinations) => {
+        console.log("%cAssigning Tasks", "color: blue; font-weight: bold;");
+    
+        if (distanceMatrix.length === 0 || deliveryPeople.length === 0 || destinations.length === 0) {
+            console.error("%cCannot assign tasks: missing data", "color: red; font-weight: bold;");
+            return;
+        }
+    
+        // Normalize the cost matrix to be square by adding dummy rows/columns with Infinity.
+        const N = Math.max(deliveryPeople.length, destinations.length);
+        const costMatrix = Array.from({ length: N }, () => Array(N).fill(Infinity));
+    
+        for (let i = 0; i < deliveryPeople.length; i++) {
+            for (let j = 0; j < destinations.length; j++) {
+                costMatrix[i][j] = distanceMatrix[i][j];
             }
+        }
+    
+        // Find the minimum cost and assignments using branch and bound.
+        const { node, totalCost } = findMinCost(costMatrix, deliveryPeople.length, destinations.length);
+        const assignments = getAssignments(node);
+    
+        console.log(assignments);
+    
+        // Map assignments to delivery people and destinations.
+        const newAssignments = assignments.map(({ workerID, jobID }) => ({
+            assignedTo: deliveryPeople[workerID],
+            destination: destinations[jobID]
+        }));
+    
+        setAssignments(newAssignments);
+    
+        // Clear existing routes.
+        routes.forEach(route => {
+            if (route.polyline) map.removeLayer(route.polyline);
+            if (route.marker) map.removeLayer(route.marker);
         });
-
-        setAssignments(assignments);
-
+        setRoutes([]);
+    
+        console.log("%cNew Assignments:", "color: green; font-weight: bold;", newAssignments);
+    
+        // Calculate and draw new routes for each assignment.
+        newAssignments.forEach((assignment, index) => {
+            console.log("%cCalculating route for assignment:", "color: purple; font-weight: bold;", assignment);
+            calculateAndDrawRoute(assignment.assignedTo, assignment.destination, routeColors[index % routeColors.length])
+                .then(route => {
+                    if (route) {
+                        console.log("%cRoute calculated successfully:", "color: green;", route);
+                        setRoutes(prevRoutes => [...prevRoutes, route]);
+                    } else {
+                        console.warn("%cFailed to calculate route", "color: orange;");
+                    }
+                })
+                .catch(error => {
+                    console.error("%cError calculating route:", "color: red;", error);
+                });
+        });
+    
+        console.log("%cTotal cost of assignments:", "color: blue;", totalCost);
     };
+    
+    // Helper function to map back the assignments from the min-cost node.
+    const getAssignments = (node) => {
+        let assignments = [];
+        while (node.parent !== null) {
+            assignments.push({ workerID: node.workerID, jobID: node.jobID });
+            node = node.parent;
+        }
+        return assignments.reverse(); // reverse to get the order from the root to leaf
+    };
+    
+    // Finds minimum cost using Branch and Bound.
+    function findMinCost(costMatrix, numWorkers, numJobs) {
+        const N = Math.max(numWorkers, numJobs);
+        let pq = [];
+    
+        // Initialize the heap with a dummy node.
+        let root = { parent: null, workerID: -1, jobID: -1, pathCost: 0, cost: 0, assigned: Array(N).fill(false) };
+        pq.push(root);
+    
+        while (pq.length > 0) {
+            let min = pq.shift();
+            let i = min.workerID + 1;
+    
+            // If all workers have been assigned a job, return the result.
+            if (i === numWorkers) {
+                return { node: min, totalCost: min.cost };
+            }
+    
+            // Explore all job assignments for the current worker.
+            for (let j = 0; j < numJobs; j++) {
+                if (!min.assigned[j]) {
+                    let child = {
+                        parent: min,
+                        workerID: i,
+                        jobID: j,
+                        pathCost: min.pathCost + costMatrix[i][j],
+                        assigned: [...min.assigned]
+                    };
+                    child.assigned[j] = true;
+    
+                    // Calculate the lower bound (cost estimate).
+                    child.cost = child.pathCost + calculateLowerBound(costMatrix, i, child.assigned);
+    
+                    // Add the child to the priority queue.
+                    pq.push(child);
+                }
+            }
+    
+            // Sort the queue by the cost to always expand the least-cost node.
+            pq.sort((a, b) => a.cost - b.cost);
+        }
+    
+        return { node: null, totalCost: Infinity }; // Return an invalid result if no solution is found.
+    }
+    
+    // Calculate lower bound cost estimation.
+    function calculateLowerBound(costMatrix, workerIdx, assigned) {
+        let cost = 0;
+        
+        // Iterate over remaining workers and find the minimum possible cost for each.
+        for (let i = workerIdx + 1; i < costMatrix.length; i++) {
+            let minCost = Infinity;
+            for (let j = 0; j < costMatrix[i].length; j++) {
+                if (!assigned[j] && costMatrix[i][j] < minCost) {
+                    minCost = costMatrix[i][j];
+                }
+            }
+            cost += minCost;
+        }
+    
+        return cost;
+    }
+    
+    
+
+
+    const calculateAndDrawRoute = async (person, dest, color) => {
+        console.log("%cCalculating route:", "color: cyan;", {person, dest, color});
+        const graphhopperKey = import.meta.env.VITE_GRAPHHOPPER_KEY;
+        const waypoints = [
+            `${person.location.lat},${person.location.lng}`,
+            `${restaurant.location.lat},${restaurant.location.lng}`,
+            `${dest.location.lat},${dest.location.lng}`
+        ];
+    
+        try {
+            const response = await axios.get(
+                `https://graphhopper.com/api/1/route?point=${waypoints.join('&point=')}&vehicle=car&locale=en&calc_points=true&key=${graphhopperKey}`
+            );
+    
+            if (response.data && response.data.paths && response.data.paths.length > 0) {
+                const bestRoute = response.data.paths[0];
+                const routeCoordinates = decodePolyline(bestRoute.points);
+    
+                console.log("%cRoute data received:", "color: green;", {distance: bestRoute.distance, time: bestRoute.time});
+    
+                const polyline = L.polyline(routeCoordinates, {
+                    color: color,
+                    weight: 4,
+                    opacity: 1
+                }).addTo(map);
+    
+                const marker = animateMarker(routeCoordinates, color);
+    
+                return {
+                    deliveryPersonId: person.id,
+                    destinationId: dest.id,
+                    color: color,
+                    distance: bestRoute.distance,
+                    time: bestRoute.time,
+                    coordinates: routeCoordinates,
+                    polyline: polyline,
+                    marker: marker
+                };
+            } else {
+                console.warn("%cNo valid route found", "color: orange;");
+            }
+        } catch (error) {
+            console.error('%cError fetching route:', "color: red;", error);
+        }
+    
+        return null;
+    };
+
+
+
+   
+    
+    
 
     return (<div id="app" className="p-4">
         <div className="mb-4 flex flex-col space-y-2">
@@ -242,16 +409,22 @@ const MapComponent = () => {
             </div>
         </div>
         <div ref={mapRef} className="h-96 border border-gray-300"></div>
-        <div className="mt-4">
-            <h2 className="text-lg font-semibold">Assignments:</h2>
-            <ul className="list-disc ml-6">
-                {assignments.map((assignment, index) => (
-                    <li key={index}>
-                        Delivery Person {assignment.assignedTo.id} assigned to Destination {assignment.destination.id}
-                    </li>
-                ))}
-            </ul>
-        </div>
+        {/* <div className="mt-4">
+                <h2 className="text-lg font-semibold">Assignments:</h2>
+                <ul className="list-disc ml-6">
+                    {assignments.map((assignment, index) => (
+                        <li key={index}>
+                            Delivery Person {assignment.assignedTo.id} assigned to Destination {assignment.destination.id}
+                        </li>
+                    ))}
+                </ul>
+                <h2 className="text-lg font-semibold mt-4">Idle Delivery People:</h2>
+                <ul className="list-disc ml-6">
+                    {deliveryPeople.filter(person => !assignments.some(a => a.assignedTo.id === person.id)).map(person => (
+                        <li key={person.id}>Delivery Person {person.id}</li>
+                    ))}
+                </ul>
+            </div> */}
     </div>
     
     );
