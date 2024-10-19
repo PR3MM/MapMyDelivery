@@ -31,6 +31,7 @@ const MapComponent = () => {
             animationRef.current.forEach(animation => cancelAnimationFrame(animation));
         };
     }, []);
+    
 
     const addLocation = (e) => {
         const { lat, lng } = e.latlng;
@@ -80,6 +81,8 @@ const MapComponent = () => {
     const calculateRoutes = async () => {
         const newRoutes = [];
         const graphhopperKey = import.meta.env.VITE_GRAPHHOPPER_KEY;
+        console.log('GraphHopper API Key:', graphhopperKey);
+
  
         let colorIndex = 0;
         const distanceMatrixTemp = Array.from(Array(deliveryPeople.length + 1), () => Array(destinations.length + 1).fill(Infinity));
@@ -200,6 +203,7 @@ const MapComponent = () => {
         });
 
         setAssignments(assignments);
+
     };
 
     return (<div id="app" className="p-4">
