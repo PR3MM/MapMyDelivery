@@ -12,8 +12,10 @@ const MapComponent = () => {
     const [destinations, setDestinations] = useState([]);
     const [currentMarkerType, setCurrentMarkerType] = useState('deliveryPerson');
     const [routes, setRoutes] = useState([]);
+    const [assignments, setAssignments] = useState([]);
+    const animationRef = useRef([]);
+    const [distanceMatrix, setDistanceMatrix] = useState([]);
 
-    // Color palette for routes
     const routeColors = [
         '#FF5733', '#33FF57', '#3357FF', '#FF33F1', '#33FFF1', '#F1FF33',
         '#FF8C33', '#33FF8C', '#338CFF', '#8C33FF', '#33FFFF', '#FFFF33'
@@ -26,6 +28,7 @@ const MapComponent = () => {
 
         return () => {
             mapInstance.remove();
+            animationRef.current.forEach(animation => cancelAnimationFrame(animation));
         };
     }, []);
 
@@ -78,7 +81,8 @@ const MapComponent = () => {
         const newRoutes = [];
         const graphhopperKey = '0594e127-63d0-4fc8-8413-33cdb50f3d34';
         let colorIndex = 0;
-
+        const distanceMatrixTemp = Array.from(Array(deliveryPeople.length + 1), () => Array(destinations.length + 1).fill(Infinity));
+    
         for (const person of deliveryPeople) {
             for (const dest of destinations) {
                 const waypoints = [
@@ -86,39 +90,69 @@ const MapComponent = () => {
                     `${restaurant.location.lat},${restaurant.location.lng}`,
                     `${dest.location.lat},${dest.location.lng}`
                 ];
-
+    
                 try {
-                    const response = await axios.get(`https://graphhopper.com/api/1/route?point=${waypoints.join('&point=')}&vehicle=car&locale=en&calc_points=true&key=${graphhopperKey}`);
-
+                    const response = await axios.get(
+                        `https://graphhopper.com/api/1/route?point=${waypoints.join('&point=')}&vehicle=car&locale=en&calc_points=true&key=${graphhopperKey}`
+                    );
+    
                     if (response.data && response.data.paths && response.data.paths.length > 0) {
-                        const route = response.data.paths[0];
-                        const routeCoordinates = decodePolyline(route.points);
                         const routeColor = routeColors[colorIndex % routeColors.length];
-
+                        colorIndex++;
+    
+                        const bestRoute = response.data.paths[0];
+                        const routeCoordinates = decodePolyline(bestRoute.points);
+    
                         newRoutes.push({
                             deliveryPersonId: person.id,
                             destinationId: dest.id,
-                            distance: route.distance,
-                            time: route.time,
+                            color: routeColor,
+                            distance: bestRoute.distance,
+                            time: bestRoute.time,
                             coordinates: routeCoordinates,
-                            color: routeColor
                         });
 
-                        // Draw the route on the map with the assigned color
-                        L.polyline(routeCoordinates, {color: routeColor, weight: 3}).addTo(map);
+                        // Store distances for assignment
+                        distanceMatrixTemp[person.id][dest.id + deliveryPeople.length] = bestRoute.distance;
 
-                        colorIndex++;
+                        const polyline = L.polyline(routeCoordinates, {
+                            color: routeColor,
+                            weight: 4,
+                            opacity: 1
+                        }).addTo(map);
+    
+                        animateMarker(routeCoordinates, routeColor);
                     }
                 } catch (error) {
                     console.error('Error fetching route:', error);
                 }
             }
         }
-
+    
+        setDistanceMatrix(distanceMatrixTemp); // Save distance matrix
         setRoutes(newRoutes);
     };
 
-    // Helper function to decode the polyline
+    const animateMarker = (coordinates, color) => {
+        let step = 0;
+        const numSteps = coordinates.length;
+
+        const rider = L.circleMarker(coordinates[0], {
+            radius: 7,
+            color: color,
+            fillColor: color,
+            fillOpacity: 1
+        }).addTo(map);
+
+        function animate() {
+            step = (step + 1) % numSteps;
+            rider.setLatLng(coordinates[step]);
+            animationRef.current.push(requestAnimationFrame(animate));
+        }
+
+        animate();
+    };
+
     function decodePolyline(encoded) {
         const poly = [];
         let index = 0, len = encoded.length;
@@ -149,6 +183,25 @@ const MapComponent = () => {
         return poly;
     }
 
+    const assignTasks = () => {
+        let assignments = [];
+        let availableDeliveryPeople = [...deliveryPeople];
+
+        destinations.forEach(dest => {
+            let closestPerson = availableDeliveryPeople.reduce((closest, person, index) => {
+                let distance = distanceMatrix[person.id][dest.id + deliveryPeople.length];
+                return distance < closest.distance ? { person, distance } : closest;
+            }, { person: null, distance: Infinity }).person;
+
+            if (closestPerson) {
+                assignments.push({ destination: dest, assignedTo: closestPerson });
+                availableDeliveryPeople = availableDeliveryPeople.filter(p => p !== closestPerson);
+            }
+        });
+
+        setAssignments(assignments);
+    };
+
     return (
         <div id="app">
             <div className="input-group">
@@ -171,10 +224,9 @@ const MapComponent = () => {
             <div id="results">
                 <h2>Calculated Routes:</h2>
                 {routes.map((route, index) => (
-                    <div key={index} className="route" style={{borderLeft: `5px solid ${route.color}`}}>
+                    <div key={index} className="route" style={{ borderLeft: `5px solid ${route.color}` }}>
                         <h3>Route {index + 1}</h3>
-                        <p>Delivery Person: {route.deliveryPersonId}</p>
-                        <p>Destination: {route.destinationId}</p>
+                        <p>{`Rider ${route.deliveryPersonId} to Destination ${route.destinationId}`}</p>
                         <p>Distance: {(route.distance / 1000).toFixed(2)} km</p>
                         <p>Time: {(route.time / 60000).toFixed(2)} minutes</p>
                     </div>
