@@ -383,7 +383,7 @@ function assignmentProblem(costMatrix) {
     
     
 
-    return (<div id="app" className="p-4">
+    return (<div id="app" className="p-4 bg-black">
         <div className="mb-4 flex flex-col space-y-2">
             <label htmlFor="markerType" className="font-semibold">Select Marker Type:</label>
             <select
