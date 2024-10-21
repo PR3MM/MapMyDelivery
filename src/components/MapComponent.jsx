@@ -189,7 +189,7 @@ const MapComponent = () => {
             return;
         }
     
-        // Normalize the cost matrix to be square by adding dummy rows/columns with Infinity.
+        // Ensure the matrix is square
         const N = Math.max(deliveryPeople.length, destinations.length);
         const costMatrix = Array.from({ length: N }, () => Array(N).fill(Infinity));
     
@@ -199,122 +199,101 @@ const MapComponent = () => {
             }
         }
     
-        // Find the minimum cost and assignments using branch and bound.
-        const { node, totalCost } = findMinCost(costMatrix, deliveryPeople.length, destinations.length);
-        const assignments = getAssignments(node);
+        const result = assignmentProblem(costMatrix);
     
-        console.log(assignments);
+        console.log("Optimal Assignment Result:", result);
     
-        // Map assignments to delivery people and destinations.
-        const newAssignments = assignments.map(({ workerID, jobID }) => ({
-            assignedTo: deliveryPeople[workerID],
-            destination: destinations[jobID]
-        }));
+        // Create assignments based on the result
+        const newAssignments = result.assignments
+            .filter(({ from, to }) => from < deliveryPeople.length && to < destinations.length)
+            .map(({ from, to }) => ({
+                assignedTo: deliveryPeople[from],
+                destination: destinations[to]
+            }));
     
         setAssignments(newAssignments);
+            console.log(newAssignments)
+            console.log("newAssignments")
     
-        // Clear existing routes.
-        routes.forEach(route => {
-            if (route.polyline) map.removeLayer(route.polyline);
-            if (route.marker) map.removeLayer(route.marker);
-        });
-        setRoutes([]);
-    
-        console.log("%cNew Assignments:", "color: green; font-weight: bold;", newAssignments);
-    
-        // Calculate and draw new routes for each assignment.
+        // Calculate and draw routes for each assignment
         newAssignments.forEach((assignment, index) => {
-            console.log("%cCalculating route for assignment:", "color: purple; font-weight: bold;", assignment);
-            calculateAndDrawRoute(assignment.assignedTo, assignment.destination, routeColors[index % routeColors.length])
-                .then(route => {
-                    if (route) {
-                        console.log("%cRoute calculated successfully:", "color: green;", route);
-                        setRoutes(prevRoutes => [...prevRoutes, route]);
-                    } else {
-                        console.warn("%cFailed to calculate route", "color: orange;");
-                    }
-                })
-                .catch(error => {
-                    console.error("%cError calculating route:", "color: red;", error);
-                });
+            calculateAndDrawRoute(
+                assignment.assignedTo,
+                assignment.destination,
+                routeColors[index % routeColors.length]
+            );
         });
-    
-        console.log("%cTotal cost of assignments:", "color: blue;", totalCost);
     };
-    
-    // Helper function to map back the assignments from the min-cost node.
-    const getAssignments = (node) => {
-        let assignments = [];
-        while (node.parent !== null) {
-            assignments.push({ workerID: node.workerID, jobID: node.jobID });
-            node = node.parent;
+
+    // Implementing Hungarian Algorithm
+    //matrix and n == rows|columns
+//     const hungarianAlgorithm = (matrix,n) => {
+//         let size = n;
+//         for(let i=0;i<size;i++){
+//             for(let j=0;j<size;j++){
+//                 cost[i][j] = -1*(matrix[i*n+j]);
+
+//                 let ans  =  -1* hungarian();
+//                 return ans;
+//             }
+//     }
+// }
+
+
+
+// Example usage
+function assignmentProblem(costMatrix) {
+    const n = costMatrix.length;  // Assuming square matrix
+    let minCost = Infinity;
+    let bestAssignment = [];
+
+    function permute(arr, l, r) {
+        if (l === r) {
+            // Calculate total cost for this permutation
+            let currentCost = 0;
+            for (let i = 0; i < n; i++) {
+                currentCost += costMatrix[i][arr[i]];
+            }
+
+            // Update the minimum cost and best assignment if needed
+            if (currentCost < minCost) {
+                minCost = currentCost;
+                bestAssignment = [...arr];
+            }
+        } else {
+            // Permute all possible assignments
+            for (let i = l; i <= r; i++) {
+                [arr[l], arr[i]] = [arr[i], arr[l]];  // Swap
+                permute(arr, l + 1, r);
+                [arr[l], arr[i]] = [arr[i], arr[l]];  // Backtrack
+            }
         }
-        return assignments.reverse(); // reverse to get the order from the root to leaf
+    }
+
+    // Initialize array for destination indices [0, 1, 2, ..., n-1]
+    let destinationIndices = Array.from({ length: n }, (_, i) => i);
+
+    // Generate all permutations of destination assignments
+    permute(destinationIndices, 0, n - 1);
+
+    // Return the optimal assignment and its cost
+    return {
+        totalCost: minCost,
+        assignments: bestAssignment.map((to, from) => ({ from, to }))
     };
-    
-    // Finds minimum cost using Branch and Bound.
-    function findMinCost(costMatrix, numWorkers, numJobs) {
-        const N = Math.max(numWorkers, numJobs);
-        let pq = [];
-    
-        // Initialize the heap with a dummy node.
-        let root = { parent: null, workerID: -1, jobID: -1, pathCost: 0, cost: 0, assigned: Array(N).fill(false) };
-        pq.push(root);
-    
-        while (pq.length > 0) {
-            let min = pq.shift();
-            let i = min.workerID + 1;
-    
-            // If all workers have been assigned a job, return the result.
-            if (i === numWorkers) {
-                return { node: min, totalCost: min.cost };
-            }
-    
-            // Explore all job assignments for the current worker.
-            for (let j = 0; j < numJobs; j++) {
-                if (!min.assigned[j]) {
-                    let child = {
-                        parent: min,
-                        workerID: i,
-                        jobID: j,
-                        pathCost: min.pathCost + costMatrix[i][j],
-                        assigned: [...min.assigned]
-                    };
-                    child.assigned[j] = true;
-    
-                    // Calculate the lower bound (cost estimate).
-                    child.cost = child.pathCost + calculateLowerBound(costMatrix, i, child.assigned);
-    
-                    // Add the child to the priority queue.
-                    pq.push(child);
-                }
-            }
-    
-            // Sort the queue by the cost to always expand the least-cost node.
-            pq.sort((a, b) => a.cost - b.cost);
-        }
-    
-        return { node: null, totalCost: Infinity }; // Return an invalid result if no solution is found.
-    }
-    
-    // Calculate lower bound cost estimation.
-    function calculateLowerBound(costMatrix, workerIdx, assigned) {
-        let cost = 0;
-        
-        // Iterate over remaining workers and find the minimum possible cost for each.
-        for (let i = workerIdx + 1; i < costMatrix.length; i++) {
-            let minCost = Infinity;
-            for (let j = 0; j < costMatrix[i].length; j++) {
-                if (!assigned[j] && costMatrix[i][j] < minCost) {
-                    minCost = costMatrix[i][j];
-                }
-            }
-            cost += minCost;
-        }
-    
-        return cost;
-    }
-    
+}
+
+
+// Test the implementation
+// const costMatrix = [
+//     [1500, 4000, 4500],
+//     [2000, 6000, 3500],
+//     [2000, 4000, 2500]
+// ];
+
+// const result = assignmentProblem(costMatrix);
+// console.log("Total Cost:", result.totalCost);
+// console.log("Assignments:", result.assignments);
     
 
 
