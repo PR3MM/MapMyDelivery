@@ -491,12 +491,12 @@ const assignmentProblem = (costMatrix) => {
 
 
 // Test the implementation
-// let costMatrix = [[82,83,69,92],[77,37,49,92],[11,69,5,86],[8,9,98,23]]
+let costMatrix = [[82,83,69,92],[77,37,49,92],[11,69,5,86],[8,9,98,23]]
 
 
-// const result = assignmentProblem(costMatrix);
-// console.log("Total Cost:", result.totalCost);
-// console.log("Assignments:", result.assignments);
+const result = assignmentProblem(costMatrix);
+console.log("Total Cost:", result.totalCost);
+console.log("Assignments:", result.assignments);
     
 
 
