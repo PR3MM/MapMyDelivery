@@ -111,7 +111,7 @@ const MapComponent = () => {
                         if (response.data && response.data.paths && response.data.paths.length > 0) {
                             const bestRoute = response.data.paths[0];
                             distanceMatrixTemp[i][j] = bestRoute.distance;
-                            console.log(`Route calculated: Person ${i+1} to Destination ${j+1}, Distance: ${bestRoute.distance}`);
+                            // console.log(`Route calculated: Person ${i+1} to Destination ${j+1}, Distance: ${bestRoute.distance}`);
                         } else {
                             console.warn(`No valid route found for Person ${i+1} to Destination ${j+1}`);
                         }
@@ -124,7 +124,7 @@ const MapComponent = () => {
             setDistanceMatrix(distanceMatrixTemp);
 
             
-            console.log("Distance matrix calculated:", distanceMatrixTemp);
+            // console.log("Distance matrix calculated:", distanceMatrixTemp);
             assignTasks(distanceMatrixTemp, deliveryPeople, destinations);
         } catch (error) {
             console.error("Error in calculateRoutes:", error);
@@ -182,7 +182,7 @@ const MapComponent = () => {
     }
 
     const assignTasks = (distanceMatrix, deliveryPeople, destinations) => {
-        console.log("%cAssigning Tasks", "color: blue; font-weight: bold;");
+        // console.log("%cAssigning Tasks", "color: blue; font-weight: bold;");
     
         if (distanceMatrix.length === 0 || deliveryPeople.length === 0 || destinations.length === 0) {
             console.error("%cCannot assign tasks: missing data", "color: red; font-weight: bold;");
@@ -201,7 +201,7 @@ const MapComponent = () => {
     
         const result = assignmentProblem(costMatrix);
     
-        console.log("Optimal Assignment Result:", result);
+        // console.log("Optimal Assignment Result:", result);
     
         // Create assignments based on the result
         const newAssignments = result.assignments
@@ -212,8 +212,8 @@ const MapComponent = () => {
             }));
     
         setAssignments(newAssignments);
-            console.log(newAssignments)
-            console.log("newAssignments")
+            // console.log(newAssignments)
+            // console.log("newAssignments")
     
         // Calculate and draw routes for each assignment
         newAssignments.forEach((assignment, index) => {
@@ -225,23 +225,11 @@ const MapComponent = () => {
         });
     };
 
-    // Implementing Hungarian Algorithm
-    //matrix and n == rows|columns
-//     const hungarianAlgorithm = (matrix,n) => {
-//         let size = n;
-//         for(let i=0;i<size;i++){
-//             for(let j=0;j<size;j++){
-//                 cost[i][j] = -1*(matrix[i*n+j]);
-
-//                 let ans  =  -1* hungarian();
-//                 return ans;
-//             }
-//     }
-// }
+    
 class HungarianAlgorithm {
     constructor() {
         this.costs = null;
-        this.originalCosts = null;  // Store original costs for final calculation
+        this.originalCosts = null;  
         this.n = 0;
         this.marked = null;
         this.rowCover = null;
@@ -251,7 +239,6 @@ class HungarianAlgorithm {
     }
 
     solve(costMatrix) {
-        // Validate input
         if (!costMatrix || !costMatrix.length || !costMatrix[0].length) {
             throw new Error('Invalid cost matrix');
         }
@@ -259,7 +246,6 @@ class HungarianAlgorithm {
             throw new Error('Cost matrix must be square');
         }
 
-        // Initialize
         this.originalCosts = this.copyMatrix(costMatrix);
         this.costs = this.copyMatrix(costMatrix);
         this.n = this.costs.length;
@@ -297,7 +283,6 @@ class HungarianAlgorithm {
     }
 
     reduceRows() {
-        // Subtract minimum value from each row
         for (let i = 0; i < this.n; i++) {
             const minVal = Math.min(...this.costs[i]);
             for (let j = 0; j < this.n; j++) {
@@ -436,7 +421,6 @@ class HungarianAlgorithm {
         };
     }
 
-    // Helper methods
     findUncoveredZero() {
         for (let i = 0; i < this.n; i++) {
             for (let j = 0; j < this.n; j++) {
@@ -499,7 +483,6 @@ class HungarianAlgorithm {
     }
 }
 
-// Example usage and test
 const assignmentProblem = (costMatrix) => {
     const hungarian = new HungarianAlgorithm();
     return hungarian.solve(costMatrix);
@@ -508,17 +491,17 @@ const assignmentProblem = (costMatrix) => {
 
 
 // Test the implementation
-let costMatrix = [[82,83,69,92],[77,37,49,92],[11,69,5,86],[8,9,98,23]]
+// let costMatrix = [[82,83,69,92],[77,37,49,92],[11,69,5,86],[8,9,98,23]]
 
 
-const result = assignmentProblem(costMatrix);
-console.log("Total Cost:", result.totalCost);
-console.log("Assignments:", result.assignments);
+// const result = assignmentProblem(costMatrix);
+// console.log("Total Cost:", result.totalCost);
+// console.log("Assignments:", result.assignments);
     
 
 
     const calculateAndDrawRoute = async (person, dest, color) => {
-        console.log("%cCalculating route:", "color: cyan;", {person, dest, color});
+        // console.log("%cCalculating route:", "color: cyan;", {person, dest, color});
         const graphhopperKey = import.meta.env.VITE_GRAPHHOPPER_KEY;
         const waypoints = [
             `${person.location.lat},${person.location.lng}`,
@@ -535,7 +518,7 @@ console.log("Assignments:", result.assignments);
                 const bestRoute = response.data.paths[0];
                 const routeCoordinates = decodePolyline(bestRoute.points);
     
-                console.log("%cRoute data received:", "color: green;", {distance: bestRoute.distance, time: bestRoute.time});
+                // console.log("%cRoute data received:", "color: green;", {distance: bestRoute.distance, time: bestRoute.time});
     
                 const polyline = L.polyline(routeCoordinates, {
                     color: color,
