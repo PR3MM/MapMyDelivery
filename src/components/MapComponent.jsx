@@ -238,50 +238,273 @@ const MapComponent = () => {
 //             }
 //     }
 // }
+class HungarianAlgorithm {
+    constructor() {
+        this.costs = null;
+        this.originalCosts = null;  // Store original costs for final calculation
+        this.n = 0;
+        this.marked = null;
+        this.rowCover = null;
+        this.colCover = null;
+        this.path = null;
+        this.path_count = 0;
+    }
 
+    solve(costMatrix) {
+        // Validate input
+        if (!costMatrix || !costMatrix.length || !costMatrix[0].length) {
+            throw new Error('Invalid cost matrix');
+        }
+        if (costMatrix.length !== costMatrix[0].length) {
+            throw new Error('Cost matrix must be square');
+        }
 
+        // Initialize
+        this.originalCosts = this.copyMatrix(costMatrix);
+        this.costs = this.copyMatrix(costMatrix);
+        this.n = this.costs.length;
+        this.marked = Array(this.n).fill().map(() => Array(this.n).fill(0));
+        this.rowCover = Array(this.n).fill(0);
+        this.colCover = Array(this.n).fill(0);
+        this.path = Array(this.n * 2).fill().map(() => Array(2).fill(0));
+        this.path_count = 0;
 
-// Example usage
-function assignmentProblem(costMatrix) {
-    const n = costMatrix.length;  // Assuming square matrix
-    let minCost = Infinity;
-    let bestAssignment = [];
-
-    function permute(arr, l, r) {
-        if (l === r) {
-            // Calculate total cost for this permutation
-            let currentCost = 0;
-            for (let i = 0; i < n; i++) {
-                currentCost += costMatrix[i][arr[i]];
-            }
-
-            // Update the minimum cost and best assignment if needed
-            if (currentCost < minCost) {
-                minCost = currentCost;
-                bestAssignment = [...arr];
-            }
-        } else {
-            // Permute all possible assignments
-            for (let i = l; i <= r; i++) {
-                [arr[l], arr[i]] = [arr[i], arr[l]];  // Swap
-                permute(arr, l + 1, r);
-                [arr[l], arr[i]] = [arr[i], arr[l]];  // Backtrack
+        let step = 1;
+        while (step) {
+            switch(step) {
+                case 1:
+                    step = this.reduceRows();
+                    break;
+                case 2:
+                    step = this.markIndependentZeros();
+                    break;
+                case 3:
+                    step = this.coverColumns();
+                    break;
+                case 4:
+                    step = this.findZero();
+                    break;
+                case 5:
+                    step = this.constructPath();
+                    break;
+                case 6:
+                    step = this.modifyCosts();
+                    break;
+                case 7:
+                    return this.findOptimalAssignment();
             }
         }
     }
 
-    // Initialize array for destination indices [0, 1, 2, ..., n-1]
-    let destinationIndices = Array.from({ length: n }, (_, i) => i);
+    reduceRows() {
+        // Subtract minimum value from each row
+        for (let i = 0; i < this.n; i++) {
+            const minVal = Math.min(...this.costs[i]);
+            for (let j = 0; j < this.n; j++) {
+                this.costs[i][j] -= minVal;
+            }
+        }
+        return 2;
+    }
 
-    // Generate all permutations of destination assignments
-    permute(destinationIndices, 0, n - 1);
+    markIndependentZeros() {
+        for (let i = 0; i < this.n; i++) {
+            for (let j = 0; j < this.n; j++) {
+                if (this.costs[i][j] === 0 && 
+                    !this.rowCover[i] && 
+                    !this.colCover[j]) {
+                    this.marked[i][j] = 1;
+                    this.rowCover[i] = 1;
+                    this.colCover[j] = 1;
+                }
+            }
+        }
+        this.clearCovers();
+        return 3;
+    }
 
-    // Return the optimal assignment and its cost
-    return {
-        totalCost: minCost,
-        assignments: bestAssignment.map((to, from) => ({ from, to }))
-    };
+    coverColumns() {
+        let count = 0;
+        for (let j = 0; j < this.n; j++) {
+            for (let i = 0; i < this.n; i++) {
+                if (this.marked[i][j] === 1) {
+                    this.colCover[j] = 1;
+                    count++;
+                    break;
+                }
+            }
+        }
+        return (count >= this.n) ? 7 : 4;
+    }
+
+    findZero() {
+        let zero = this.findUncoveredZero();
+        if (!zero) {
+            return 6;
+        }
+        let row = zero[0];
+        let col = zero[1];
+        
+        this.marked[row][col] = 2;
+        let starCol = this.findStarInRow(row);
+        
+        if (starCol === -1) {
+            this.path[0] = [row, col];
+            this.path_count = 1;
+            return 5;
+        }
+        
+        this.rowCover[row] = 1;
+        this.colCover[starCol] = 0;
+        return 4;
+    }
+
+    constructPath() {
+        let done = false;
+        let r = -1, c = -1;
+
+        this.path_count = 1;
+        this.path[0] = [this.path[0][0], this.path[0][1]];
+
+        while (!done) {
+            r = this.findStarInCol(this.path[this.path_count - 1][1]);
+            if (r === -1) {
+                done = true;
+            } else {
+                this.path_count++;
+                this.path[this.path_count - 1] = [r, this.path[this.path_count - 2][1]];
+                c = this.findPrimeInRow(r);
+                this.path_count++;
+                this.path[this.path_count - 1] = [r, c];
+            }
+        }
+
+        this.convertPath();
+        this.clearCovers();
+        this.erasePrimes();
+        return 3;
+    }
+
+    modifyCosts() {
+        let minVal = Infinity;
+
+        for (let i = 0; i < this.n; i++) {
+            for (let j = 0; j < this.n; j++) {
+                if (!this.rowCover[i] && !this.colCover[j]) {
+                    minVal = Math.min(minVal, this.costs[i][j]);
+                }
+            }
+        }
+
+        if (minVal === Infinity) {
+            throw new Error('No solution exists');
+        }
+
+        for (let i = 0; i < this.n; i++) {
+            for (let j = 0; j < this.n; j++) {
+                if (this.rowCover[i]) {
+                    this.costs[i][j] += minVal;
+                }
+                if (!this.colCover[j]) {
+                    this.costs[i][j] -= minVal;
+                }
+            }
+        }
+        return 4;
+    }
+
+    findOptimalAssignment() {
+        const assignments = [];
+        let totalCost = 0;
+
+        for (let i = 0; i < this.n; i++) {
+            for (let j = 0; j < this.n; j++) {
+                if (this.marked[i][j] === 1) {
+                    assignments.push({
+                        from: i,
+                        to: j,
+                        cost: this.originalCosts[i][j]
+                    });
+                    totalCost += this.originalCosts[i][j];
+                }
+            }
+        }
+
+        return {
+            assignments,
+            totalCost
+        };
+    }
+
+    // Helper methods
+    findUncoveredZero() {
+        for (let i = 0; i < this.n; i++) {
+            for (let j = 0; j < this.n; j++) {
+                if (this.costs[i][j] === 0 && !this.rowCover[i] && !this.colCover[j]) {
+                    return [i, j];
+                }
+            }
+        }
+        return null;
+    }
+
+    findStarInRow(row) {
+        for (let j = 0; j < this.n; j++) {
+            if (this.marked[row][j] === 1) return j;
+        }
+        return -1;
+    }
+
+    findStarInCol(col) {
+        for (let i = 0; i < this.n; i++) {
+            if (this.marked[i][col] === 1) return i;
+        }
+        return -1;
+    }
+
+    findPrimeInRow(row) {
+        for (let j = 0; j < this.n; j++) {
+            if (this.marked[row][j] === 2) return j;
+        }
+        return -1;
+    }
+
+    convertPath() {
+        for (let i = 0; i < this.path_count; i++) {
+            if (this.marked[this.path[i][0]][this.path[i][1]] === 1) {
+                this.marked[this.path[i][0]][this.path[i][1]] = 0;
+            } else {
+                this.marked[this.path[i][0]][this.path[i][1]] = 1;
+            }
+        }
+    }
+
+    erasePrimes() {
+        for (let i = 0; i < this.n; i++) {
+            for (let j = 0; j < this.n; j++) {
+                if (this.marked[i][j] === 2) {
+                    this.marked[i][j] = 0;
+                }
+            }
+        }
+    }
+
+    clearCovers() {
+        this.rowCover.fill(0);
+        this.colCover.fill(0);
+    }
+
+    copyMatrix(matrix) {
+        return matrix.map(row => [...row]);
+    }
 }
+
+// Example usage and test
+const assignmentProblem = (costMatrix) => {
+    const hungarian = new HungarianAlgorithm();
+    return hungarian.solve(costMatrix);
+};
+
 
 
 // Test the implementation
