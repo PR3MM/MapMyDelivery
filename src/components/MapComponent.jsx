@@ -191,7 +191,7 @@ const MapComponent = () => {
     
         // Ensure the matrix is square
         const N = Math.max(deliveryPeople.length, destinations.length);
-        const costMatrix = Array.from({ length: N }, () => Array(N).fill(Infinity));
+        let costMatrix = Array.from({ length: N }, () => Array(N).fill(Infinity));
     
         for (let i = 0; i < deliveryPeople.length; i++) {
             for (let j = 0; j < destinations.length; j++) {
@@ -285,15 +285,12 @@ function assignmentProblem(costMatrix) {
 
 
 // Test the implementation
-// const costMatrix = [
-//     [1500, 4000, 4500],
-//     [2000, 6000, 3500],
-//     [2000, 4000, 2500]
-// ];
+let costMatrix = [[82,83,69,92],[77,37,49,92],[11,69,5,86],[8,9,98,23]]
 
-// const result = assignmentProblem(costMatrix);
-// console.log("Total Cost:", result.totalCost);
-// console.log("Assignments:", result.assignments);
+
+const result = assignmentProblem(costMatrix);
+console.log("Total Cost:", result.totalCost);
+console.log("Assignments:", result.assignments);
     
 
 
@@ -410,14 +407,14 @@ function assignmentProblem(costMatrix) {
                 >
                     Calculate Routes
                 </button>
-                <button
+                {/* <button
                     // onClick={assignTasks}
                     onClick={assignTasksnew}
                     disabled={routes.length === 0}
                     className="bg-teal-500 text-white px-4 py-2 rounded hover:bg-teal-600 disabled:opacity-50"
-                >
-                    Assign Tasks
-                </button>
+                > */}
+                    {/* Assign Tasks
+                </button> */}
             </div>
         </div>
         <div ref={mapRef} className="h-96 border border-gray-300"></div>
