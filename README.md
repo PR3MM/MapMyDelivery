@@ -25,3 +25,6 @@
 - Node.js (v14 or higher)
 - npm (v6 or higher)
 
+
+![image](https://github.com/user-attachments/assets/67527c40-ae36-4a29-8f3e-b8bae41f93d7)
+
