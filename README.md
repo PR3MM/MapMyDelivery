@@ -38,4 +38,8 @@ The project aims to efficiently allocate delivery personnel to destinations whil
 - Add a dashboard with analytics on delivery performance.  
 - Enable user authentication for personalized route management.  
 
+![image](https://github.com/user-attachments/assets/67527c40-ae36-4a29-8f3e-b8bae41f93d7)
+![Screenshot_30-10-2024_191026_mapmydelivery vercel app](https://github.com/user-attachments/assets/3f1dbde3-6fb9-45bd-929c-15d000bd7d4c)
+![Screenshot_30-10-2024_19941_mapmydelivery vercel app](https://github.com/user-attachments/assets/ce512fb9-17b0-423e-9f8b-f53d0fa634a7)
+
 🚀 **Contributions & Feedback are welcome!**
